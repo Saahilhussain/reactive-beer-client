@@ -1,20 +1,19 @@
 package guru.springframework.reactivebeerclient.client;
 
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import guru.springframework.reactivebeerclient.config.WebClientConfig;
 import guru.springframework.reactivebeerclient.model.BeerDto;
 import guru.springframework.reactivebeerclient.model.BeerPagedList;
 import guru.springframework.reactivebeerclient.model.v2.BeerStyleEnum;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
@@ -45,7 +44,7 @@ class BeerClientImplTest {
   }
 
 
-  @Disabled("API returning inventory when should not be")
+//  @Disabled("API returning inventory when should not be")
   @Test
   void getBeerById() {
     Mono<BeerPagedList> beerPagedListMono = beerClient.listBeers(null, null, null, null,
@@ -63,7 +62,32 @@ class BeerClientImplTest {
   }
 
 
+  @Test
+  void getBeerByIdFunctionalStyle() throws InterruptedException {
+    CountDownLatch countDownLatch= new CountDownLatch(2);
+    AtomicReference<String> beerName = new AtomicReference<>();
+    AtomicReference<BeerDto> beerDton= new AtomicReference<>();
+    beerClient.listBeers(null, null, null, null,
+                                                                 false)
 
+        .map(beerDtos ->{
+          beerName.set(beerDtos.getContent().get(0).getBeerName());
+          countDownLatch.countDown();
+          return beerDtos.getContent().get(0).getId();
+        })
+        .map(id->beerClient.getBeerById(id,false))
+        .flatMap(mono->mono)
+        .subscribe(beerDto -> {
+          beerDton.set(beerDto);
+          countDownLatch.countDown();
+        });
+
+    countDownLatch.await();
+
+    assertEquals(beerDton.get().getBeerName(),beerName.get());
+
+
+  }
   @Test
   void createBeer () {
     Mono<ResponseEntity<Void>> responseEntityMono = beerClient.createBeer(BeerDto.builder()
